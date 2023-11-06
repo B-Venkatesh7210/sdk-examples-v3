@@ -19,11 +19,16 @@ import {
 import { Magic } from "magic-sdk";
 import { contractABI } from "../contract/contractABI";
 
+// Create a provider for the Polygon Mumbai network
 const provider = new ethers.providers.JsonRpcProvider(
   "https://rpc.ankr.com/polygon_mumbai"
 );
 
+
+// Specify the chain ID for Polygon Mumbai
 let chainId = 80001; // Polygon Mumbai or change as per your preferred chain
+
+// Create a Bundler instance
 const bundler: IBundler = new Bundler({
   // get from biconomy dashboard https://dashboard.biconomy.io/
   // for mainnet bundler url contact us on Telegram
@@ -33,12 +38,15 @@ const bundler: IBundler = new Bundler({
   entryPointAddress: DEFAULT_ENTRYPOINT_ADDRESS,
 });
 
+
+// Create a Paymaster instance
 const paymaster: IPaymaster = new BiconomyPaymaster({
   // get from biconomy dashboard https://dashboard.biconomy.io/
   // Use this paymaster url for testing, you'll need to create your own paymaster for gasless transactions on your smart contracts.
   paymasterUrl:
     "https://paymaster.biconomy.io/api/v1/80001/-RObQRX9ei.fc6918eb-c582-4417-9d5a-0507b17cfe71",
 });
+
 
 export default function Home() {
   const [smartAccount, setSmartAccount] =
@@ -62,7 +70,6 @@ export default function Home() {
     });
 
     console.log("Magic initialized", magic);
-    //TODO: Replace API key with "YOUR_API_KEY"
   }, []);
 
   const connect = async () => {
@@ -104,7 +111,6 @@ export default function Home() {
       provider
     );
     const countId = await contractInstance.getCount();
-    console.log(countId.toString());
     setCount(countId.toString());
   };
 
@@ -121,7 +127,6 @@ export default function Home() {
       to: contractAddress,
       data: minTx.data,
     };
-    console.log(smartAccount)
     let userOp = await smartAccount?.buildUserOp([tx1]);
     console.log("UserOp", { userOp });
     const biconomyPaymaster =

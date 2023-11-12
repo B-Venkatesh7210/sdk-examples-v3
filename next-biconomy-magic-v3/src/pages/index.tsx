@@ -10,7 +10,7 @@ import {
   SponsorUserOperationDto,
   PaymasterMode,
 } from "@biconomy/paymaster";
-import { Wallet, providers, ethers } from "ethers";
+import { ethers } from "ethers";
 import { ChainId } from "@biconomy/core-types";
 import {
   ECDSAOwnershipValidationModule,

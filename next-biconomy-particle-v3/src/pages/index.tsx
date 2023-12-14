@@ -5,33 +5,24 @@ import {
   BiconomySmartAccountV2,
   DEFAULT_ENTRYPOINT_ADDRESS,
 } from "@biconomy/account";
-import { Wallet, providers, ethers } from "ethers";
+import {
+  IHybridPaymaster,
+  SponsorUserOperationDto,
+  PaymasterMode,
+} from "@biconomy/paymaster";
+import { ethers } from "ethers";
 import { ChainId } from "@biconomy/core-types";
-import { ParticleAuthModule, ParticleProvider } from "@biconomy/particle-auth";
 import {
   ECDSAOwnershipValidationModule,
   DEFAULT_ECDSA_OWNERSHIP_MODULE,
 } from "@biconomy/modules";
+import { ParticleAuthModule, ParticleProvider } from "@biconomy/particle-auth";
 import { contractABI } from "../contract/contractABI";
 
 // Create a provider for the Polygon Mumbai network
 const provider = new ethers.providers.JsonRpcProvider(
   "https://rpc.ankr.com/polygon_mumbai"
 );
-
-//Particle auth will require api keys which you can get from the Particle Dashboard. (https://dashboard.particle.network/)
-const particle = new ParticleAuthModule.ParticleNetwork({
-  //@ts-ignore
-  projectId: process.env.NEXT_PUBLIC_PARTICLE_AUTH_PROJECT_ID,
-  //@ts-ignore
-  clientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-  //@ts-ignore
-  appId: process.env.NEXT_PUBLIC_PARTICLE_AUTH_APP_ID,
-  wallet: {
-    displayWalletEntry: true,
-    defaultWalletEntryPosition: ParticleAuthModule.WalletEntryPosition.BR,
-  },
-});
 
 // Specify the chain ID for Polygon Mumbai
 let chainId = 80001; // Polygon Mumbai or change as per your preferred chain
@@ -61,9 +52,22 @@ export default function Home() {
   );
   const [count, setCount] = useState<string | null>(null);
 
+  //Particle auth will require api keys which you can get from the Particle Dashboard. (https://dashboard.particle.network/)
+  const particle = new ParticleAuthModule.ParticleNetwork({
+    //Use your own project ID
+    projectId: "e9944f42-f219-4f90-a765-356841c5bcc3",
+    //Use your own clientKey
+    clientKey: "cDUIugdEkRHx7DphbHi0TnV1Q2PJNsruqn0AtnSZ",
+    //Use your own appId
+    appId: "0f44c567-b77f-417c-871b-7d2721de3fe6",
+    wallet: {
+      displayWalletEntry: true,
+      defaultWalletEntryPosition: ParticleAuthModule.WalletEntryPosition.BR,
+    },
+  });
+
   const connect = async () => {
     try {
-      console.log(process.env.NEXT_PUBLIC_PARTICLE_AUTH_PROJECT_ID)
       const userInfo = await particle.auth.login();
       console.log("Logged in user:", userInfo);
       const particleProvider = new ParticleProvider(particle.auth);
@@ -107,10 +111,78 @@ export default function Home() {
     setCount(countId.toString());
   };
 
+  const incrementCount = async () => {
+    const contractAddress = "0xc34E02663D5FFC7A1CeaC3081bF811431B096C8C";
+    const contractInstance = new ethers.Contract(
+      contractAddress,
+      contractABI,
+      provider
+    );
+    const minTx = await contractInstance.populateTransaction.increment();
+    console.log("Mint Tx Data", minTx.data);
+    const tx1 = {
+      to: contractAddress,
+      data: minTx.data,
+    };
+    let userOp = await smartAccount?.buildUserOp([tx1]);
+    console.log("UserOp", { userOp });
+    const biconomyPaymaster =
+      smartAccount?.paymaster as IHybridPaymaster<SponsorUserOperationDto>;
+    let paymasterServiceData: SponsorUserOperationDto = {
+      mode: PaymasterMode.SPONSORED,
+      smartAccountInfo: {
+        name: "BICONOMY",
+        version: "2.0.0",
+      },
+    };
+
+    //If you get AA34 Signature Error, you have to add the below try method and recalculate callGasLimit and initiate it so that you don't get the error.
+    try {
+      const paymasterAndDataResponse =
+        await biconomyPaymaster.getPaymasterAndData(
+          //@ts-ignore
+          userOp,
+          paymasterServiceData
+        );
+
+      //@ts-ignore
+      userOp.paymasterAndData = paymasterAndDataResponse.paymasterAndData;
+
+      if (
+        paymasterAndDataResponse.callGasLimit &&
+        paymasterAndDataResponse.verificationGasLimit &&
+        paymasterAndDataResponse.preVerificationGas
+      ) {
+        // Returned gas limits must be replaced in your op as you update paymasterAndData.
+        // Because these are the limits paymaster service signed on to generate paymasterAndData
+        // If you receive AA34 error check here..
+
+        //@ts-ignore
+        userOp.callGasLimit = paymasterAndDataResponse.callGasLimit;
+        //@ts-ignore
+        userOp.verificationGasLimit =
+          paymasterAndDataResponse.verificationGasLimit;
+        //@ts-ignore
+        userOp.preVerificationGas = paymasterAndDataResponse.preVerificationGas;
+      }
+
+      //@ts-ignore
+      const userOpResponse = await smartAccount?.sendUserOp(userOp);
+      console.log("userOpHash", { userOpResponse });
+      //@ts-ignore
+      const { receipt } = await userOpResponse.wait(1);
+      console.log("txHash", receipt.transactionHash);
+
+      await getCountId();
+    } catch (e) {
+      console.log("error received ", e);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-start gap-8 p-24">
       <div className="text-[4rem] font-bold text-orange-400">
-        Biconomy-Magic
+        Biconomy-Particle
       </div>
       {!smartAccount && (
         <button
@@ -139,7 +211,7 @@ export default function Home() {
             <div className="flex flex-col justify-center items-center gap-4">
               <button
                 className="w-[10rem] h-[3rem] bg-orange-300 text-black font-bold rounded-lg"
-                // onClick={incrementCount}
+                onClick={incrementCount}
               >
                 Increment Count
               </button>
